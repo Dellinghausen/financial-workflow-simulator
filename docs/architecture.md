@@ -35,6 +35,20 @@ Temporary provider failures retain the `PROCESSING` state while attempts remain.
 and `FAILED` are terminal in the MVP. Settlement has an independent lifecycle so payment
 processing and fund movement are not conflated.
 
+| Current state | Command | Result |
+| --- | --- | --- |
+| `PENDING` | Start processing | `PROCESSING` |
+| `PROCESSING` | Confirm success | `SUCCEEDED` |
+| `PROCESSING` | Confirm permanent failure | `FAILED` |
+
+All other transitions are rejected. Each accepted transition advances an optimistic-locking
+version and requires a monotonic UTC timestamp. Domain methods receive identity and time as
+inputs so tests remain deterministic and infrastructure concerns do not leak into the model.
+
+Amounts are immutable value objects stored as positive integer minor units. The MVP
+explicitly supports BRL, EUR, GBP, and USD; adding a currency is a deliberate domain change,
+not an unchecked string accepted at an API boundary.
+
 ## Delivery and consistency model
 
 Background work and provider events use at-least-once delivery. Correctness comes from
