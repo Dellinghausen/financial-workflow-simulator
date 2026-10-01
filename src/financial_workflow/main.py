@@ -27,4 +27,4 @@ def run() -> None:
     """Run the development HTTP server."""
     import uvicorn
 
-    uvicorn.run("financial_workflow.main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("financial_workflow.main:app", host="127.0.0.1", port=8000, reload=False)
