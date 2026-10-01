@@ -22,3 +22,5 @@ jobs:
       - run: ruff check .
       - run: mypy
       - run: pytest
+      - run: docker compose config --quiet
+      - run: docker build --tag financial-workflow-simulator:test .

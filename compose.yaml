@@ -1,0 +1,51 @@
+name: financial-workflow-simulator
+
+services:
+  api:
+    build:
+      context: .
+    environment:
+      APP_ENV: local
+      DATABASE_URL: postgresql+psycopg://financial:financial@database:5432/financial_workflow
+      LOG_LEVEL: INFO
+      WEBHOOK_SECRET: local-development-only
+    ports:
+      - "8000:8000"
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: financial_workflow
+      POSTGRES_PASSWORD: financial
+      POSTGRES_USER: financial
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U financial -d financial_workflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:
+

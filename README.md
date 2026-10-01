@@ -44,12 +44,25 @@ See [docs/architecture.md](docs/architecture.md) for scope, boundaries, and trad
 
 ## Current status
 
-The repository foundation is complete. The health endpoint and engineering quality gates
-are in place; payment workflows will be added in small, reviewable increments.
+The repository foundation and local PostgreSQL environment are complete. Liveness and
+database-backed readiness probes are available; payment workflows will be added in small,
+reviewable increments.
 
 ## Local development
 
-Python 3.13 is required.
+The recommended path requires Docker with Compose support:
+
+```bash
+cp .env.example .env
+docker compose up --build
+curl http://localhost:8000/health/live
+curl http://localhost:8000/health/ready
+```
+
+The API is ready only after it can execute a query against PostgreSQL. Open
+<http://localhost:8000/docs> for the generated API documentation.
+
+For development without containers, Python 3.13 is required:
 
 ```bash
 python3.13 -m venv .venv
@@ -62,9 +75,8 @@ mypy
 financial-api
 ```
 
-Open <http://localhost:8000/docs> for the generated API documentation.
-
-Docker Compose support will be added with the PostgreSQL foundation in the next milestone.
+The non-containerized API expects PostgreSQL on `localhost:5432` unless `DATABASE_URL` is
+overridden.
 
 ## Development principles
 
