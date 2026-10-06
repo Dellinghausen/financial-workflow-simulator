@@ -5,7 +5,7 @@ Each milestone should produce a small English-language commit with focused tests
 - [x] Repository foundation and engineering standards
 - [x] Docker Compose and PostgreSQL health checks
 - [x] Core payment domain and state-machine unit tests
-- [ ] Database schema and migrations
+- [x] Database schema and migrations
 - [ ] Payment creation API and idempotency
 - [ ] Transactional job queue and worker
 - [ ] Fictional provider adapter and controlled failures

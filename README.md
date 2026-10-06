@@ -59,8 +59,10 @@ curl http://localhost:8000/health/live
 curl http://localhost:8000/health/ready
 ```
 
-The API is ready only after it can execute a query against PostgreSQL. Open
-<http://localhost:8000/docs> for the generated API documentation.
+The one-shot `migrate` service applies Alembic migrations after PostgreSQL becomes healthy;
+the API starts only after migrations succeed. The API is ready only after it can execute a
+query against PostgreSQL. Open <http://localhost:8000/docs> for the generated API
+documentation.
 
 For development without containers, Python 3.13 is required:
 
@@ -77,6 +79,13 @@ financial-api
 
 The non-containerized API expects PostgreSQL on `localhost:5432` unless `DATABASE_URL` is
 overridden.
+
+Schema changes are managed exclusively through Alembic:
+
+```bash
+alembic upgrade head
+alembic downgrade -1
+```
 
 ## Development principles
 

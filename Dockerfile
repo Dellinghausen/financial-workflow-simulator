@@ -10,6 +10,8 @@ RUN addgroup --system application \
     && adduser --system --ingroup application --home /nonexistent application
 
 COPY pyproject.toml README.md LICENSE ./
+COPY alembic.ini ./
+COPY migrations ./migrations
 COPY src ./src
 
 RUN python -m pip install --no-cache-dir .

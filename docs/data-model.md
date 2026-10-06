@@ -21,3 +21,14 @@ The first database milestone will introduce the following tables.
 Public identifiers use UUIDs. Monetary amounts use positive integer minor units. Timestamps
 are stored in UTC. Database constraints will enforce uniqueness, valid amounts, referential
 integrity, and balanced ledger transactions.
+
+## Implemented schema
+
+The initial migration creates `payments` with named constraints for positive amounts,
+supported currencies, valid states, non-negative versions, and monotonic timestamps. A
+composite index on `(status, created_at)` supports predictable operational scans. Status and
+currency use constrained strings instead of PostgreSQL enums so future additions do not
+require non-transactional enum alterations.
+
+Other tables remain intentionally deferred until their owning workflow is implemented. This
+keeps migrations reviewable and prevents speculative columns from becoming accidental API.

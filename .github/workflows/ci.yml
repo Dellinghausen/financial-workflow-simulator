@@ -24,3 +24,9 @@ jobs:
       - run: pytest
       - run: docker compose config --quiet
       - run: docker build --tag financial-workflow-simulator:test .
+      - run: docker compose up --detach --wait database
+      - run: alembic upgrade head
+      - run: alembic downgrade base
+      - run: alembic upgrade head
+      - if: always()
+        run: docker compose down --volumes
