@@ -55,6 +55,11 @@ Background work and provider events use at-least-once delivery. Correctness come
 idempotency keys, unique constraints, explicit locks, and transactions rather than an
 unrealistic exactly-once claim.
 
+Payment creation reserves the idempotency key with PostgreSQL `INSERT ... ON CONFLICT` in
+the same transaction that inserts the payment. A canonical request fingerprint distinguishes
+safe replays from conflicting key reuse. Concurrent requests therefore coordinate at the
+database uniqueness constraint instead of relying on process-local locks.
+
 The first queue implementation uses PostgreSQL and `FOR UPDATE SKIP LOCKED`. A dedicated
 message broker would improve throughput and workload isolation at larger scale, but would
 add operational cost without improving the lessons demonstrated by this MVP.

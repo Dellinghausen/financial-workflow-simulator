@@ -44,8 +44,9 @@ financial-api = "financial_workflow.main:run"
 packages = ["src/financial_workflow"]
 
 [tool.pytest.ini_options]
-addopts = "--strict-config --strict-markers --cov=financial_workflow --cov-report=term-missing"
+addopts = "--strict-config --strict-markers -m 'not integration' --cov=financial_workflow --cov-report=term-missing"
 testpaths = ["tests"]
+markers = ["integration: requires a live PostgreSQL database"]
 
 [tool.coverage.run]
 branch = true

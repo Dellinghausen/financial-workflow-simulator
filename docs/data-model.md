@@ -32,3 +32,9 @@ require non-transactional enum alterations.
 
 Other tables remain intentionally deferred until their owning workflow is implemented. This
 keeps migrations reviewable and prevents speculative columns from becoming accidental API.
+
+The second migration creates `idempotency_keys`. Its primary key is supplied by the API
+client, while a SHA-256 request fingerprint detects incompatible reuse. A unique payment ID
+and a deferred foreign key allow the reservation and payment to be inserted atomically even
+under concurrent requests. The implementation guarantees one payment identity per key; a
+replay returns the payment's current representation.

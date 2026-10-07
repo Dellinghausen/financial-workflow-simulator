@@ -80,6 +80,19 @@ financial-api
 The non-containerized API expects PostgreSQL on `localhost:5432` unless `DATABASE_URL` is
 overridden.
 
+Create a payment with a client-generated idempotency key:
+
+```bash
+curl --request POST http://localhost:8000/payments \
+  --header 'Content-Type: application/json' \
+  --header 'Idempotency-Key: interview-demo-001' \
+  --data '{"amount_minor": 1250, "currency": "USD"}'
+```
+
+Repeating the same key and body returns the same payment and sets
+`Idempotent-Replayed: true`. Reusing the key with a different amount or currency returns
+`409 Conflict`.
+
 Schema changes are managed exclusively through Alembic:
 
 ```bash

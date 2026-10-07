@@ -7,9 +7,11 @@ from sqlalchemy import (
     BigInteger,
     CheckConstraint,
     DateTime,
+    ForeignKey,
     Index,
     Integer,
     String,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -48,4 +50,30 @@ class PaymentRecord(Base):
     version: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class IdempotencyRecord(Base):
+    """A durable reservation connecting one request key to one payment."""
+
+    __tablename__ = "idempotency_keys"
+    __table_args__ = (
+        CheckConstraint(
+            "char_length(request_fingerprint) = 64",
+            name="ck_idempotency_keys_fingerprint_length",
+        ),
+        UniqueConstraint("payment_id", name="uq_idempotency_keys_payment_id"),
+    )
+
+    key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    request_fingerprint: Mapped[str] = mapped_column(String(64))
+    payment_id: Mapped[UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey(
+            "payments.id",
+            name="fk_idempotency_keys_payment_id_payments",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
