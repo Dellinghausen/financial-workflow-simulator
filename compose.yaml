@@ -44,6 +44,22 @@ services:
         condition: service_healthy
     restart: "no"
 
+  worker:
+    build:
+      context: .
+    command: ["financial-worker"]
+    environment:
+      APP_ENV: local
+      DATABASE_URL: postgresql+psycopg://financial:financial@database:5432/financial_workflow
+      LOG_LEVEL: INFO
+      WEBHOOK_SECRET: local-development-only
+    depends_on:
+      database:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   database:
     image: postgres:17-alpine
     environment:

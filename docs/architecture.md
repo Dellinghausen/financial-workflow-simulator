@@ -64,6 +64,12 @@ The first queue implementation uses PostgreSQL and `FOR UPDATE SKIP LOCKED`. A d
 message broker would improve throughput and workload isolation at larger scale, but would
 add operational cost without improving the lessons demonstrated by this MVP.
 
+Jobs use short ownership leases rather than permanent locks. A worker crash leaves the job
+recoverable after the lease expires. Completion, retry, and permanent failure updates require
+the current worker identity, preventing stale workers from acknowledging reassigned work.
+Handler execution is designed for at-least-once delivery: moving a payment from `PENDING` to
+`PROCESSING` is idempotent when redelivered.
+
 ## Security model
 
 The provider signs webhook payloads with HMAC. Secrets are supplied at runtime and never

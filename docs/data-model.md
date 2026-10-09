@@ -38,3 +38,8 @@ client, while a SHA-256 request fingerprint detects incompatible reuse. A unique
 and a deferred foreign key allow the reservation and payment to be inserted atomically even
 under concurrent requests. The implementation guarantees one payment identity per key; a
 replay returns the payment's current representation.
+
+The `jobs` table is the transactional queue. It stores typed JSON payloads, availability,
+attempt count, lease ownership, bounded error details, and lifecycle timestamps. The claim
+index covers `(status, available_at, created_at)`. A job is inserted alongside each new
+payment, so a committed payment can never be missing its initial processing work.

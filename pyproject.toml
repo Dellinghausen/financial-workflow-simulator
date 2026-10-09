@@ -39,12 +39,13 @@ dev = [
 
 [project.scripts]
 financial-api = "financial_workflow.main:run"
+financial-worker = "financial_workflow.worker:run"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/financial_workflow"]
 
 [tool.pytest.ini_options]
-addopts = "--strict-config --strict-markers -m 'not integration' --cov=financial_workflow --cov-report=term-missing"
+addopts = "--import-mode=importlib --strict-config --strict-markers -m 'not integration' --cov=financial_workflow --cov-report=term-missing"
 testpaths = ["tests"]
 markers = ["integration: requires a live PostgreSQL database"]
 

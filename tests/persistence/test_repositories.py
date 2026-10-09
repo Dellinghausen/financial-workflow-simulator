@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 from uuid import UUID
 
@@ -6,8 +6,11 @@ import pytest
 
 from financial_workflow.application import IdempotencyConflictError
 from financial_workflow.domain import Currency, Money, Payment
-from financial_workflow.persistence.models import IdempotencyRecord, PaymentRecord
-from financial_workflow.persistence.repositories import PostgreSQLPaymentRepository
+from financial_workflow.persistence.models import IdempotencyRecord, JobRecord, PaymentRecord
+from financial_workflow.persistence.repositories import (
+    PostgreSQLPaymentProcessor,
+    PostgreSQLPaymentRepository,
+)
 
 PAYMENT_ID = UUID("018f47d2-a97c-7f18-bb5c-d53f8b86a121")
 NOW = datetime(2026, 10, 7, 12, 0, tzinfo=UTC)
@@ -39,9 +42,12 @@ def test_repository_inserts_new_payment_after_reserving_key() -> None:
     )
 
     assert result.replayed is False
-    persisted = session.add.call_args.args[0]
+    persisted = session.add.call_args_list[0].args[0]
     assert isinstance(persisted, PaymentRecord)
     assert persisted.id == PAYMENT_ID
+    job = session.add.call_args_list[1].args[0]
+    assert isinstance(job, JobRecord)
+    assert job.payload == {"payment_id": str(PAYMENT_ID)}
 
 
 def test_repository_replays_existing_payment() -> None:
@@ -118,4 +124,45 @@ def test_repository_detects_broken_idempotency_reference() -> None:
             idempotency_key="checkout-123",
             request_fingerprint=FINGERPRINT,
         )
+
+
+def test_payment_processor_moves_pending_payment_to_processing() -> None:
+    sessions = MagicMock()
+    session = sessions.begin.return_value.__enter__.return_value
+    record = PaymentRecord(
+        id=PAYMENT_ID,
+        amount_minor=500,
+        currency="BRL",
+        status="PENDING",
+        version=0,
+        created_at=NOW,
+        updated_at=NOW,
+    )
+    session.execute.return_value.scalar_one.return_value = record
+
+    PostgreSQLPaymentProcessor(sessions).start_processing(
+        PAYMENT_ID, now=NOW + timedelta(seconds=1)
+    )
+
+    assert record.status == "PROCESSING"
+    assert record.version == 1
+
+
+def test_payment_processor_is_idempotent_after_transition() -> None:
+    sessions = MagicMock()
+    session = sessions.begin.return_value.__enter__.return_value
+    record = PaymentRecord(
+        id=PAYMENT_ID,
+        amount_minor=500,
+        currency="BRL",
+        status="PROCESSING",
+        version=1,
+        created_at=NOW,
+        updated_at=NOW,
+    )
+    session.execute.return_value.scalar_one.return_value = record
+
+    PostgreSQLPaymentProcessor(sessions).start_processing(PAYMENT_ID, now=NOW)
+
+    assert record.version == 1
 

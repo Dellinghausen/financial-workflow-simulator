@@ -93,6 +93,10 @@ Repeating the same key and body returns the same payment and sets
 `Idempotent-Replayed: true`. Reusing the key with a different amount or currency returns
 `409 Conflict`.
 
+Payment creation also enqueues `PROCESS_PAYMENT` in the same database transaction. The
+dedicated worker claims jobs with row-level locking, moves the payment to `PROCESSING`, and
+acknowledges the job. Failed handlers are retried with bounded exponential backoff.
+
 Schema changes are managed exclusively through Alembic:
 
 ```bash

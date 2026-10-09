@@ -1,5 +1,8 @@
 """PostgreSQL repository implementations."""
 
+from datetime import datetime
+from uuid import UUID, uuid4
+
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, sessionmaker
@@ -9,7 +12,7 @@ from financial_workflow.application import (
     IdempotencyConflictError,
 )
 from financial_workflow.domain import Currency, Money, Payment, PaymentStatus
-from financial_workflow.persistence.models import IdempotencyRecord, PaymentRecord
+from financial_workflow.persistence.models import IdempotencyRecord, JobRecord, PaymentRecord
 
 
 def _to_record(payment: Payment) -> PaymentRecord:
@@ -63,6 +66,21 @@ class PostgreSQLPaymentRepository:
 
             if reservation is not None:
                 session.add(_to_record(payment))
+                session.add(
+                    JobRecord(
+                        id=uuid4(),
+                        kind="PROCESS_PAYMENT",
+                        payload={"payment_id": str(payment.id)},
+                        status="READY",
+                        attempts=0,
+                        available_at=payment.created_at,
+                        locked_at=None,
+                        locked_by=None,
+                        last_error=None,
+                        created_at=payment.created_at,
+                        updated_at=payment.created_at,
+                    )
+                )
                 return CreatePaymentResult(payment=payment, replayed=False)
 
             existing = session.execute(
@@ -75,4 +93,26 @@ class PostgreSQLPaymentRepository:
             if payment_record is None:
                 raise RuntimeError("Idempotency record references a missing payment")
             return CreatePaymentResult(payment=_to_domain(payment_record), replayed=True)
+
+
+class PostgreSQLPaymentProcessor:
+    """Advance payments to processing with row-level serialization."""
+
+    def __init__(self, sessions: sessionmaker[Session]) -> None:
+        self._sessions = sessions
+
+    def start_processing(self, payment_id: UUID, *, now: datetime) -> None:
+        with self._sessions.begin() as session:
+            record = session.execute(
+                select(PaymentRecord)
+                .where(PaymentRecord.id == payment_id)
+                .with_for_update()
+            ).scalar_one()
+            payment = _to_domain(record)
+            if payment.status is PaymentStatus.PROCESSING:
+                return
+            payment.start_processing(now=now)
+            record.status = payment.status.value
+            record.updated_at = payment.updated_at
+            record.version = payment.version
 

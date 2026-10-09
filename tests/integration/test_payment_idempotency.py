@@ -9,12 +9,19 @@ from financial_workflow.application import (
     CreatePaymentCommand,
     CreatePaymentService,
     IdempotencyConflictError,
+    JobKind,
+    ProcessPaymentJobHandler,
+    Worker,
 )
 from financial_workflow.config import get_settings
 from financial_workflow.database import build_engine
 from financial_workflow.domain import Currency
-from financial_workflow.persistence.models import IdempotencyRecord, PaymentRecord
-from financial_workflow.persistence.repositories import PostgreSQLPaymentRepository
+from financial_workflow.persistence.jobs import PostgreSQLJobQueue
+from financial_workflow.persistence.models import IdempotencyRecord, JobRecord, PaymentRecord
+from financial_workflow.persistence.repositories import (
+    PostgreSQLPaymentProcessor,
+    PostgreSQLPaymentRepository,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -26,6 +33,7 @@ def test_postgresql_enforces_idempotent_payment_creation() -> None:
     engine = build_engine(get_settings().database_url)
     sessions = sessionmaker(engine, expire_on_commit=False)
     with sessions.begin() as session:
+        session.execute(delete(JobRecord))
         session.execute(delete(IdempotencyRecord))
         session.execute(delete(PaymentRecord))
 
@@ -49,5 +57,22 @@ def test_postgresql_enforces_idempotent_payment_creation() -> None:
     with Session(engine) as session:
         assert session.scalar(select(func.count()).select_from(PaymentRecord)) == 1
         assert session.scalar(select(func.count()).select_from(IdempotencyRecord)) == 1
+        assert session.scalar(select(func.count()).select_from(JobRecord)) == 1
+
+    worker = Worker(
+        PostgreSQLJobQueue(sessions),
+        {
+            JobKind.PROCESS_PAYMENT: ProcessPaymentJobHandler(
+                PostgreSQLPaymentProcessor(sessions)
+            )
+        },
+        worker_id="integration-worker",
+        clock=lambda: NOW,
+    )
+    assert worker.run_once() is True
+
+    with Session(engine) as session:
+        assert session.scalar(select(PaymentRecord.status)) == "PROCESSING"
+        assert session.scalar(select(JobRecord.status)) == "COMPLETED"
     engine.dispose()
 

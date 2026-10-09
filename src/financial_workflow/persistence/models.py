@@ -77,3 +77,33 @@ class IdempotencyRecord(Base):
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
+
+class JobRecord(Base):
+    """A durable unit of background work with a recoverable lease."""
+
+    __tablename__ = "jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('PROCESS_PAYMENT')",
+            name="ck_jobs_kind_valid",
+        ),
+        CheckConstraint(
+            "status IN ('READY', 'PROCESSING', 'COMPLETED', 'FAILED')",
+            name="ck_jobs_status_valid",
+        ),
+        CheckConstraint("attempts >= 0", name="ck_jobs_attempts_non_negative"),
+        Index("ix_jobs_claim", "status", "available_at", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(postgresql.UUID(as_uuid=True), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(32))
+    payload: Mapped[dict[str, str]] = mapped_column(postgresql.JSONB)
+    status: Mapped[str] = mapped_column(String(16))
+    attempts: Mapped[int] = mapped_column(Integer)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    locked_by: Mapped[str | None] = mapped_column(String(128))
+    last_error: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
