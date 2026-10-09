@@ -70,6 +70,12 @@ the current worker identity, preventing stale workers from acknowledging reassig
 Handler execution is designed for at-least-once delivery: moving a payment from `PENDING` to
 `PROCESSING` is idempotent when redelivered.
 
+The provider port is implemented by a deterministic fictional adapter. Its scenario is part
+of both the idempotency fingerprint and the transactional job payload. Retryable provider
+errors propagate to the worker policy; permanent rejection is translated into a valid
+`PROCESSING -> FAILED` domain transition. Successful submission remains `PROCESSING` until a
+provider webhook supplies the final outcome.
+
 ## Security model
 
 The provider signs webhook payloads with HMAC. Secrets are supplied at runtime and never

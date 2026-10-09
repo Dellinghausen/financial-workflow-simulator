@@ -8,6 +8,13 @@ from time import sleep
 from typing import Protocol
 from uuid import UUID
 
+from financial_workflow.application.providers import (
+    PermanentProviderError,
+    ProviderClient,
+    ProviderScenario,
+)
+from financial_workflow.domain import Payment
+
 
 class JobKind(StrEnum):
     PROCESS_PAYMENT = "PROCESS_PAYMENT"
@@ -42,17 +49,34 @@ class JobQueue(Protocol):
 class JobHandler(Protocol):
     def handle(self, job: Job, *, now: datetime) -> None: ...
 
+    def on_exhausted(self, job: Job, *, now: datetime, error: Exception) -> None: ...
+
 
 class PaymentProcessingPort(Protocol):
-    def start_processing(self, payment_id: UUID, *, now: datetime) -> None: ...
+    def start_processing(self, payment_id: UUID, *, now: datetime) -> Payment: ...
+
+    def mark_failed(self, payment_id: UUID, *, now: datetime) -> None: ...
 
 
 class ProcessPaymentJobHandler:
-    def __init__(self, payments: PaymentProcessingPort) -> None:
+    def __init__(self, payments: PaymentProcessingPort, provider: ProviderClient) -> None:
         self._payments = payments
+        self._provider = provider
 
     def handle(self, job: Job, *, now: datetime) -> None:
-        self._payments.start_processing(UUID(job.payload["payment_id"]), now=now)
+        payment_id = UUID(job.payload["payment_id"])
+        payment = self._payments.start_processing(payment_id, now=now)
+        try:
+            self._provider.submit(
+                payment,
+                scenario=ProviderScenario(job.payload["provider_scenario"]),
+                attempt=job.attempts,
+            )
+        except PermanentProviderError:
+            self._payments.mark_failed(payment_id, now=now)
+
+    def on_exhausted(self, job: Job, *, now: datetime, error: Exception) -> None:
+        self._payments.mark_failed(UUID(job.payload["payment_id"]), now=now)
 
 
 class Worker:
@@ -79,11 +103,15 @@ class Worker:
         if job is None:
             return False
 
+        handler: JobHandler | None = None
         try:
-            self._handlers[job.kind].handle(job, now=now)
+            handler = self._handlers[job.kind]
+            handler.handle(job, now=now)
         except Exception as error:
             message = str(error)[:500]
             if job.attempts >= self._max_attempts:
+                if handler is not None:
+                    handler.on_exhausted(job, now=now, error=error)
                 self._queue.fail(job, worker_id=self._worker_id, now=now, error=message)
             else:
                 delay = timedelta(seconds=min(2**job.attempts, 60))

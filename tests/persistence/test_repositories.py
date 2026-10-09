@@ -4,7 +4,7 @@ from uuid import UUID
 
 import pytest
 
-from financial_workflow.application import IdempotencyConflictError
+from financial_workflow.application import IdempotencyConflictError, ProviderScenario
 from financial_workflow.domain import Currency, Money, Payment
 from financial_workflow.persistence.models import IdempotencyRecord, JobRecord, PaymentRecord
 from financial_workflow.persistence.repositories import (
@@ -39,6 +39,7 @@ def test_repository_inserts_new_payment_after_reserving_key() -> None:
         payment=build_payment(),
         idempotency_key="checkout-123",
         request_fingerprint=FINGERPRINT,
+        provider_scenario=ProviderScenario.RETRY_ONCE,
     )
 
     assert result.replayed is False
@@ -47,7 +48,10 @@ def test_repository_inserts_new_payment_after_reserving_key() -> None:
     assert persisted.id == PAYMENT_ID
     job = session.add.call_args_list[1].args[0]
     assert isinstance(job, JobRecord)
-    assert job.payload == {"payment_id": str(PAYMENT_ID)}
+    assert job.payload == {
+        "payment_id": str(PAYMENT_ID),
+        "provider_scenario": "RETRY_ONCE",
+    }
 
 
 def test_repository_replays_existing_payment() -> None:
@@ -76,6 +80,7 @@ def test_repository_replays_existing_payment() -> None:
         payment=build_payment(),
         idempotency_key="checkout-123",
         request_fingerprint=FINGERPRINT,
+        provider_scenario=ProviderScenario.SUCCESS,
     )
 
     assert result.replayed is True
@@ -101,6 +106,7 @@ def test_repository_rejects_conflicting_payload() -> None:
             payment=build_payment(),
             idempotency_key="checkout-123",
             request_fingerprint=FINGERPRINT,
+            provider_scenario=ProviderScenario.SUCCESS,
         )
 
 
@@ -123,6 +129,7 @@ def test_repository_detects_broken_idempotency_reference() -> None:
             payment=build_payment(),
             idempotency_key="checkout-123",
             request_fingerprint=FINGERPRINT,
+            provider_scenario=ProviderScenario.SUCCESS,
         )
 
 
@@ -140,12 +147,13 @@ def test_payment_processor_moves_pending_payment_to_processing() -> None:
     )
     session.execute.return_value.scalar_one.return_value = record
 
-    PostgreSQLPaymentProcessor(sessions).start_processing(
+    payment = PostgreSQLPaymentProcessor(sessions).start_processing(
         PAYMENT_ID, now=NOW + timedelta(seconds=1)
     )
 
     assert record.status == "PROCESSING"
     assert record.version == 1
+    assert payment.status.value == "PROCESSING"
 
 
 def test_payment_processor_is_idempotent_after_transition() -> None:
@@ -162,7 +170,49 @@ def test_payment_processor_is_idempotent_after_transition() -> None:
     )
     session.execute.return_value.scalar_one.return_value = record
 
-    PostgreSQLPaymentProcessor(sessions).start_processing(PAYMENT_ID, now=NOW)
+    payment = PostgreSQLPaymentProcessor(sessions).start_processing(PAYMENT_ID, now=NOW)
 
     assert record.version == 1
+    assert payment.status.value == "PROCESSING"
+
+
+def test_payment_processor_marks_processing_payment_failed() -> None:
+    sessions = MagicMock()
+    session = sessions.begin.return_value.__enter__.return_value
+    record = PaymentRecord(
+        id=PAYMENT_ID,
+        amount_minor=500,
+        currency="BRL",
+        status="PROCESSING",
+        version=1,
+        created_at=NOW,
+        updated_at=NOW,
+    )
+    session.execute.return_value.scalar_one.return_value = record
+
+    PostgreSQLPaymentProcessor(sessions).mark_failed(
+        PAYMENT_ID, now=NOW + timedelta(seconds=1)
+    )
+
+    assert record.status == "FAILED"
+    assert record.version == 2
+
+
+def test_payment_processor_failure_is_idempotent() -> None:
+    sessions = MagicMock()
+    session = sessions.begin.return_value.__enter__.return_value
+    record = PaymentRecord(
+        id=PAYMENT_ID,
+        amount_minor=500,
+        currency="BRL",
+        status="FAILED",
+        version=2,
+        created_at=NOW,
+        updated_at=NOW,
+    )
+    session.execute.return_value.scalar_one.return_value = record
+
+    PostgreSQLPaymentProcessor(sessions).mark_failed(PAYMENT_ID, now=NOW)
+
+    assert record.version == 2
 

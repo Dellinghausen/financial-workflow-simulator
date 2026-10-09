@@ -86,7 +86,7 @@ Create a payment with a client-generated idempotency key:
 curl --request POST http://localhost:8000/payments \
   --header 'Content-Type: application/json' \
   --header 'Idempotency-Key: interview-demo-001' \
-  --data '{"amount_minor": 1250, "currency": "USD"}'
+  --data '{"amount_minor": 1250, "currency": "USD", "provider_scenario": "SUCCESS"}'
 ```
 
 Repeating the same key and body returns the same payment and sets
@@ -96,6 +96,15 @@ Repeating the same key and body returns the same payment and sets
 Payment creation also enqueues `PROCESS_PAYMENT` in the same database transaction. The
 dedicated worker claims jobs with row-level locking, moves the payment to `PROCESSING`, and
 acknowledges the job. Failed handlers are retried with bounded exponential backoff.
+
+For deterministic demonstrations, `provider_scenario` accepts:
+
+- `SUCCESS`: the fictional provider accepts the submission;
+- `RETRY_ONCE`: the first attempt fails and the second succeeds;
+- `PERMANENT_FAILURE`: the payment transitions to `FAILED` without retry;
+- `TIMEOUT`: every attempt times out until the job reaches `FAILED`.
+
+No scenario contacts an external system or processes real money.
 
 Schema changes are managed exclusively through Alembic:
 

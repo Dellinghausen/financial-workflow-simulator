@@ -16,6 +16,7 @@ from financial_workflow.application import (
 from financial_workflow.config import get_settings
 from financial_workflow.database import build_engine
 from financial_workflow.domain import Currency
+from financial_workflow.integrations import DeterministicProviderClient
 from financial_workflow.persistence.jobs import PostgreSQLJobQueue
 from financial_workflow.persistence.models import IdempotencyRecord, JobRecord, PaymentRecord
 from financial_workflow.persistence.repositories import (
@@ -63,7 +64,8 @@ def test_postgresql_enforces_idempotent_payment_creation() -> None:
         PostgreSQLJobQueue(sessions),
         {
             JobKind.PROCESS_PAYMENT: ProcessPaymentJobHandler(
-                PostgreSQLPaymentProcessor(sessions)
+                PostgreSQLPaymentProcessor(sessions),
+                DeterministicProviderClient(),
             )
         },
         worker_id="integration-worker",

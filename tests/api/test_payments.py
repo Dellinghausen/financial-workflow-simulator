@@ -98,6 +98,14 @@ def test_reusing_key_for_different_request_returns_conflict() -> None:
         ({"Idempotency-Key": "invalid key"}, {"amount_minor": 100, "currency": "USD"}),
         ({"Idempotency-Key": "valid"}, {"amount_minor": 0, "currency": "USD"}),
         ({"Idempotency-Key": "valid"}, {"amount_minor": 100, "currency": "CAD"}),
+        (
+            {"Idempotency-Key": "valid"},
+            {
+                "amount_minor": 100,
+                "currency": "USD",
+                "provider_scenario": "RANDOM",
+            },
+        ),
     ],
 )
 def test_create_payment_rejects_invalid_input(

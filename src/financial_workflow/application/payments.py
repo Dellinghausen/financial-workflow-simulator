@@ -7,6 +7,7 @@ from hashlib import sha256
 from typing import Protocol
 from uuid import UUID, uuid4
 
+from financial_workflow.application.providers import ProviderScenario
 from financial_workflow.domain import Currency, Money, Payment
 
 
@@ -19,6 +20,7 @@ class CreatePaymentCommand:
     idempotency_key: str
     amount_minor: int
     currency: Currency
+    provider_scenario: ProviderScenario = ProviderScenario.SUCCESS
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +38,7 @@ class PaymentRepository(Protocol):
         payment: Payment,
         idempotency_key: str,
         request_fingerprint: str,
+        provider_scenario: ProviderScenario,
     ) -> CreatePaymentResult: ...
 
 
@@ -59,7 +62,10 @@ class CreatePaymentService:
 
     def execute(self, command: CreatePaymentCommand) -> CreatePaymentResult:
         fingerprint = sha256(
-            f"{command.amount_minor}:{command.currency.value}".encode()
+            (
+                f"{command.amount_minor}:{command.currency.value}:"
+                f"{command.provider_scenario.value}"
+            ).encode()
         ).hexdigest()
         payment = Payment.create(
             payment_id=self._id_factory(),
@@ -70,5 +76,6 @@ class CreatePaymentService:
             payment=payment,
             idempotency_key=command.idempotency_key,
             request_fingerprint=fingerprint,
+            provider_scenario=command.provider_scenario,
         )
 

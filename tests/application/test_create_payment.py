@@ -5,6 +5,7 @@ from financial_workflow.application import (
     CreatePaymentCommand,
     CreatePaymentResult,
     CreatePaymentService,
+    ProviderScenario,
 )
 from financial_workflow.domain import Currency, PaymentStatus
 
@@ -24,6 +25,7 @@ class RecordingRepository:
         payment: object,
         idempotency_key: str,
         request_fingerprint: str,
+        provider_scenario: ProviderScenario,
     ) -> CreatePaymentResult:
         from financial_workflow.domain import Payment
 
@@ -31,6 +33,7 @@ class RecordingRepository:
         self.payment_id = payment.id
         self.idempotency_key = idempotency_key
         self.request_fingerprint = request_fingerprint
+        self.provider_scenario = provider_scenario
         return CreatePaymentResult(payment=payment, replayed=False)
 
 
@@ -55,6 +58,7 @@ def test_create_payment_builds_pending_aggregate_and_stable_fingerprint() -> Non
     assert result.payment.created_at == NOW
     assert repository.idempotency_key == "checkout-123"
     assert repository.request_fingerprint == (
-        "4c1efa5624f6583c50f9acdd9c4f74c71423200666ec4c576a7672072a352ba1"
+        "49deef905d2ca493a6eb2b734f4608fbae2f1d018bbb3914c6c7d4b443dbd19e"
     )
+    assert repository.provider_scenario is ProviderScenario.SUCCESS
 

@@ -13,6 +13,12 @@ from financial_workflow.application.payments import (
     CreatePaymentService,
     IdempotencyConflictError,
 )
+from financial_workflow.application.providers import (
+    PermanentProviderError,
+    ProviderScenario,
+    ProviderSubmission,
+    RetryableProviderError,
+)
 
 __all__ = [
     "CreatePaymentCommand",
@@ -23,6 +29,10 @@ __all__ = [
     "Job",
     "JobKind",
     "ProcessPaymentJobHandler",
+    "PermanentProviderError",
+    "ProviderScenario",
+    "ProviderSubmission",
+    "RetryableProviderError",
     "Worker",
 ]
 

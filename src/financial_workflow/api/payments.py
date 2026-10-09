@@ -11,6 +11,7 @@ from financial_workflow.application import (
     CreatePaymentCommand,
     CreatePaymentHandler,
     IdempotencyConflictError,
+    ProviderScenario,
 )
 from financial_workflow.domain import Currency, Payment
 
@@ -28,6 +29,7 @@ IdempotencyKey = Annotated[
 class CreatePaymentRequest(BaseModel):
     amount_minor: int = Field(gt=0, le=9_999_999_999)
     currency: Currency
+    provider_scenario: ProviderScenario = ProviderScenario.SUCCESS
 
 
 class PaymentResponse(BaseModel):
@@ -67,6 +69,7 @@ def build_payment_router(handler: CreatePaymentHandler) -> APIRouter:
                     idempotency_key=idempotency_key,
                     amount_minor=request.amount_minor,
                     currency=request.currency,
+                    provider_scenario=request.provider_scenario,
                 )
             )
         except IdempotencyConflictError as error:

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from financial_workflow.application import (
     CreatePaymentResult,
     IdempotencyConflictError,
+    ProviderScenario,
 )
 from financial_workflow.domain import Currency, Money, Payment, PaymentStatus
 from financial_workflow.persistence.models import IdempotencyRecord, JobRecord, PaymentRecord
@@ -50,6 +51,7 @@ class PostgreSQLPaymentRepository:
         payment: Payment,
         idempotency_key: str,
         request_fingerprint: str,
+        provider_scenario: ProviderScenario,
     ) -> CreatePaymentResult:
         with self._sessions.begin() as session:
             reservation = session.execute(
@@ -70,7 +72,10 @@ class PostgreSQLPaymentRepository:
                     JobRecord(
                         id=uuid4(),
                         kind="PROCESS_PAYMENT",
-                        payload={"payment_id": str(payment.id)},
+                        payload={
+                            "payment_id": str(payment.id),
+                            "provider_scenario": provider_scenario.value,
+                        },
                         status="READY",
                         attempts=0,
                         available_at=payment.created_at,
@@ -101,7 +106,7 @@ class PostgreSQLPaymentProcessor:
     def __init__(self, sessions: sessionmaker[Session]) -> None:
         self._sessions = sessions
 
-    def start_processing(self, payment_id: UUID, *, now: datetime) -> None:
+    def start_processing(self, payment_id: UUID, *, now: datetime) -> Payment:
         with self._sessions.begin() as session:
             record = session.execute(
                 select(PaymentRecord)
@@ -110,9 +115,27 @@ class PostgreSQLPaymentProcessor:
             ).scalar_one()
             payment = _to_domain(record)
             if payment.status is PaymentStatus.PROCESSING:
-                return
+                return payment
             payment.start_processing(now=now)
-            record.status = payment.status.value
-            record.updated_at = payment.updated_at
-            record.version = payment.version
+            self._apply(record, payment)
+            return payment
+
+    def mark_failed(self, payment_id: UUID, *, now: datetime) -> None:
+        with self._sessions.begin() as session:
+            record = session.execute(
+                select(PaymentRecord)
+                .where(PaymentRecord.id == payment_id)
+                .with_for_update()
+            ).scalar_one()
+            payment = _to_domain(record)
+            if payment.status is PaymentStatus.FAILED:
+                return
+            payment.mark_failed(now=now)
+            self._apply(record, payment)
+
+    @staticmethod
+    def _apply(record: PaymentRecord, payment: Payment) -> None:
+        record.status = payment.status.value
+        record.updated_at = payment.updated_at
+        record.version = payment.version
 
