@@ -61,7 +61,7 @@ services:
     restart: unless-stopped
 
   database:
-    image: postgres:17-alpine
+    image: public.ecr.aws/docker/library/postgres:17-alpine
     environment:
       POSTGRES_DB: financial_workflow
       POSTGRES_PASSWORD: financial
