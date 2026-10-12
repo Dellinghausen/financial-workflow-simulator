@@ -76,6 +76,12 @@ errors propagate to the worker policy; permanent rejection is translated into a 
 `PROCESSING -> FAILED` domain transition. Successful submission remains `PROCESSING` until a
 provider webhook supplies the final outcome.
 
+Provider webhooks authenticate the exact request bytes with HMAC-SHA256 and bind the
+signature to a Unix timestamp. A five-minute acceptance window limits captured-request
+replay. Authentication happens before JSON parsing, and the event record plus payment state
+transition commit in one transaction. A unique provider event ID makes exact redelivery
+safe; reuse of an ID with different bytes is treated as a conflict.
+
 ## Security model
 
 The provider signs webhook payloads with HMAC. Secrets are supplied at runtime and never

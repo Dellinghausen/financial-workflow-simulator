@@ -43,3 +43,8 @@ The `jobs` table is the transactional queue. It stores typed JSON payloads, avai
 attempt count, lease ownership, bounded error details, and lifecycle timestamps. The claim
 index covers `(status, available_at, created_at)`. A job is inserted alongside each new
 payment, so a committed payment can never be missing its initial processing work.
+
+The `provider_events` table durably records the fictional provider's event ID, target
+payment, terminal outcome, payload hash, minimized JSON payload, and receive/process times.
+Its primary key provides duplicate suppression. Event insertion and the locked payment
+transition share one transaction, so neither can commit without the other.

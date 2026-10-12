@@ -5,7 +5,13 @@ from financial_workflow.persistence.models import (
     IdempotencyRecord,
     JobRecord,
     PaymentRecord,
+    ProviderEventRecord,
 )
 
-__all__ = ["Base", "IdempotencyRecord", "JobRecord", "PaymentRecord"]
-
+__all__ = [
+    "Base",
+    "IdempotencyRecord",
+    "JobRecord",
+    "PaymentRecord",
+    "ProviderEventRecord",
+]

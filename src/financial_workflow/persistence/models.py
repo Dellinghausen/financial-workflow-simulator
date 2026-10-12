@@ -107,3 +107,27 @@ class JobRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
+
+class ProviderEventRecord(Base):
+    """A received fictional-provider event and its processing result."""
+
+    __tablename__ = "provider_events"
+    __table_args__ = (
+        CheckConstraint(
+            "event_status IN ('SUCCEEDED', 'FAILED')",
+            name="ck_provider_events_status_valid",
+        ),
+        Index("ix_provider_events_payment_id", "payment_id"),
+    )
+
+    event_id: Mapped[UUID] = mapped_column(postgresql.UUID(as_uuid=True), primary_key=True)
+    payment_id: Mapped[UUID] = mapped_column(
+        postgresql.UUID(as_uuid=True),
+        ForeignKey("payments.id", name="fk_provider_events_payment_id_payments"),
+    )
+    event_status: Mapped[str] = mapped_column(String(16))
+    payload_hash: Mapped[str] = mapped_column(String(64))
+    payload: Mapped[dict[str, object]] = mapped_column(postgresql.JSONB)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

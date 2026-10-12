@@ -44,9 +44,9 @@ See [docs/architecture.md](docs/architecture.md) for scope, boundaries, and trad
 
 ## Current status
 
-The repository foundation and local PostgreSQL environment are complete. Liveness and
-database-backed readiness probes are available; payment workflows will be added in small,
-reviewable increments.
+Payment creation, transactional processing, deterministic provider outcomes, and signed
+provider webhooks are implemented. The workflow remains fictional and intentionally ends
+at a terminal payment state; ledger and settlement capabilities follow in later milestones.
 
 ## Local development
 
@@ -105,6 +105,13 @@ For deterministic demonstrations, `provider_scenario` accepts:
 - `TIMEOUT`: every attempt times out until the job reaches `FAILED`.
 
 No scenario contacts an external system or processes real money.
+
+The fictional provider completes a processing payment through
+`POST /webhooks/provider`. Requests include `X-Provider-Timestamp` and
+`X-Provider-Signature`; the signature is the hexadecimal HMAC-SHA256 of
+`<timestamp>.<raw-body>` using `WEBHOOK_SECRET`. Timestamps outside a five-minute window
+are rejected. Event IDs are stored durably: an exact replay is acknowledged with
+`duplicate: true`, while reuse with different content returns `409 Conflict`.
 
 Schema changes are managed exclusively through Alembic:
 

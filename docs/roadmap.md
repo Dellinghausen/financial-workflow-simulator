@@ -9,7 +9,7 @@ Each milestone should produce a small English-language commit with focused tests
 - [x] Payment creation API and idempotency
 - [x] Transactional job queue and worker
 - [x] Fictional provider adapter and controlled failures
-- [ ] Signed webhook ingestion and duplicate handling
+- [x] Signed webhook ingestion and duplicate handling
 - [ ] Double-entry ledger
 - [ ] Reconciliation workflow
 - [ ] Settlement workflow

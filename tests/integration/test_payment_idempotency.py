@@ -13,27 +13,40 @@ from financial_workflow.application import (
     ProcessPaymentJobHandler,
     Worker,
 )
+from financial_workflow.application.webhooks import (
+    ProviderEvent,
+    ProviderEventConflictError,
+    ProviderEventStatus,
+)
 from financial_workflow.config import get_settings
 from financial_workflow.database import build_engine
 from financial_workflow.domain import Currency
 from financial_workflow.integrations import DeterministicProviderClient
 from financial_workflow.persistence.jobs import PostgreSQLJobQueue
-from financial_workflow.persistence.models import IdempotencyRecord, JobRecord, PaymentRecord
+from financial_workflow.persistence.models import (
+    IdempotencyRecord,
+    JobRecord,
+    PaymentRecord,
+    ProviderEventRecord,
+)
 from financial_workflow.persistence.repositories import (
     PostgreSQLPaymentProcessor,
     PostgreSQLPaymentRepository,
+    PostgreSQLProviderEventRepository,
 )
 
 pytestmark = pytest.mark.integration
 
 PAYMENT_ID = UUID("018f47d2-a97c-7f18-bb5c-d53f8b86a121")
 NOW = datetime(2026, 10, 7, 12, 0, tzinfo=UTC)
+EVENT_ID = UUID("018f47d2-a97c-7f18-bb5c-d53f8b86a122")
 
 
 def test_postgresql_enforces_idempotent_payment_creation() -> None:
     engine = build_engine(get_settings().database_url)
     sessions = sessionmaker(engine, expire_on_commit=False)
     with sessions.begin() as session:
+        session.execute(delete(ProviderEventRecord))
         session.execute(delete(JobRecord))
         session.execute(delete(IdempotencyRecord))
         session.execute(delete(PaymentRecord))
@@ -76,5 +89,37 @@ def test_postgresql_enforces_idempotent_payment_creation() -> None:
     with Session(engine) as session:
         assert session.scalar(select(PaymentRecord.status)) == "PROCESSING"
         assert session.scalar(select(JobRecord.status)) == "COMPLETED"
-    engine.dispose()
 
+    event = ProviderEvent(
+        event_id=EVENT_ID,
+        payment_id=PAYMENT_ID,
+        status=ProviderEventStatus.SUCCEEDED,
+        occurred_at=NOW,
+        payload={"event_id": str(EVENT_ID), "status": "SUCCEEDED"},
+        payload_hash="a" * 64,
+    )
+    event_repository = PostgreSQLProviderEventRepository(sessions)
+
+    processed = event_repository.apply(event, received_at=NOW)
+    duplicate = event_repository.apply(event, received_at=NOW)
+
+    assert processed.payment_status == "SUCCEEDED"
+    assert processed.duplicate is False
+    assert duplicate.payment_status == "SUCCEEDED"
+    assert duplicate.duplicate is True
+
+    conflicting = ProviderEvent(
+        event_id=EVENT_ID,
+        payment_id=PAYMENT_ID,
+        status=ProviderEventStatus.FAILED,
+        occurred_at=NOW,
+        payload={"event_id": str(EVENT_ID), "status": "FAILED"},
+        payload_hash="b" * 64,
+    )
+    with pytest.raises(ProviderEventConflictError):
+        event_repository.apply(conflicting, received_at=NOW)
+
+    with Session(engine) as session:
+        assert session.scalar(select(PaymentRecord.status)) == "SUCCEEDED"
+        assert session.scalar(select(func.count()).select_from(ProviderEventRecord)) == 1
+    engine.dispose()
