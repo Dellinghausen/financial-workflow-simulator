@@ -238,6 +238,7 @@ class PostgreSQLProviderEventRepository:
                 created_at=transaction.created_at,
             )
         )
+        session.flush()
         session.add_all(
             [
                 LedgerEntryRecord(

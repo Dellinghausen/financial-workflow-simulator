@@ -9,8 +9,12 @@ ReadinessCheck = Callable[[], bool]
 
 
 def build_engine(database_url: str) -> Engine:
-    """Create a lazily connecting SQLAlchemy engine."""
-    return create_engine(database_url, pool_pre_ping=True)
+    """Create a lazily connecting SQLAlchemy engine with UTC sessions."""
+    return create_engine(
+        database_url,
+        pool_pre_ping=True,
+        connect_args={"options": "-c timezone=UTC"},
+    )
 
 
 class DatabaseReadiness:
