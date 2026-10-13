@@ -18,10 +18,18 @@ from financial_workflow.application.webhooks import (
     ProviderEventResult,
     ProviderEventStatus,
 )
-from financial_workflow.domain import Currency, Money, Payment, PaymentStatus
+from financial_workflow.domain import (
+    Currency,
+    LedgerTransaction,
+    Money,
+    Payment,
+    PaymentStatus,
+)
 from financial_workflow.persistence.models import (
     IdempotencyRecord,
     JobRecord,
+    LedgerEntryRecord,
+    LedgerTransactionRecord,
     PaymentRecord,
     ProviderEventRecord,
 )
@@ -193,6 +201,7 @@ class PostgreSQLProviderEventRepository:
             payment = _to_domain(payment_record)
             if event.status is ProviderEventStatus.SUCCEEDED:
                 payment.mark_succeeded(now=received_at)
+                self._record_successful_payment(session, payment, event, received_at)
             else:
                 payment.mark_failed(now=received_at)
             PostgreSQLPaymentProcessor._apply(payment_record, payment)
@@ -202,3 +211,42 @@ class PostgreSQLProviderEventRepository:
                 payment.status.value,
                 False,
             )
+
+    @staticmethod
+    def _record_successful_payment(
+        session: Session,
+        payment: Payment,
+        event: ProviderEvent,
+        received_at: datetime,
+    ) -> None:
+        transaction = LedgerTransaction.for_successful_payment(
+            transaction_id=uuid4(),
+            debit_entry_id=uuid4(),
+            credit_entry_id=uuid4(),
+            payment_id=payment.id,
+            money=payment.money,
+            occurred_at=event.occurred_at,
+            created_at=received_at,
+        )
+        session.add(
+            LedgerTransactionRecord(
+                id=transaction.id,
+                reference_type=transaction.reference_type,
+                reference_id=transaction.reference_id,
+                currency=transaction.currency.value,
+                occurred_at=transaction.occurred_at,
+                created_at=transaction.created_at,
+            )
+        )
+        session.add_all(
+            [
+                LedgerEntryRecord(
+                    id=entry.id,
+                    transaction_id=transaction.id,
+                    account_code=entry.account_code.value,
+                    direction=entry.direction.value,
+                    amount_minor=entry.money.amount_minor,
+                )
+                for entry in transaction.entries
+            ]
+        )

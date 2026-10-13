@@ -44,9 +44,9 @@ See [docs/architecture.md](docs/architecture.md) for scope, boundaries, and trad
 
 ## Current status
 
-Payment creation, transactional processing, deterministic provider outcomes, and signed
-provider webhooks are implemented. The workflow remains fictional and intentionally ends
-at a terminal payment state; ledger and settlement capabilities follow in later milestones.
+Payment creation, transactional processing, deterministic provider outcomes, signed
+provider webhooks, and a double-entry ledger are implemented. The workflow remains fully
+fictional; reconciliation and settlement capabilities follow in later milestones.
 
 ## Local development
 
@@ -112,6 +112,17 @@ The fictional provider completes a processing payment through
 `<timestamp>.<raw-body>` using `WEBHOOK_SECRET`. Timestamps outside a five-minute window
 are rejected. Event IDs are stored durably: an exact replay is acknowledged with
 `duplicate: true`, while reuse with different content returns `409 Conflict`.
+
+A successful webhook posts one balanced ledger transaction in the same database commit as
+the payment transition:
+
+```text
+Debit   Provider Receivable
+Credit  Merchant Payable
+```
+
+Both lines use the payment's currency and integer minor-unit amount. PostgreSQL checks the
+complete transaction at commit time, and the payment reference prevents duplicate posting.
 
 Schema changes are managed exclusively through Alembic:
 

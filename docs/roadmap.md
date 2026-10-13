@@ -10,7 +10,7 @@ Each milestone should produce a small English-language commit with focused tests
 - [x] Transactional job queue and worker
 - [x] Fictional provider adapter and controlled failures
 - [x] Signed webhook ingestion and duplicate handling
-- [ ] Double-entry ledger
+- [x] Double-entry ledger
 - [ ] Reconciliation workflow
 - [ ] Settlement workflow
 - [ ] Structured logs and audit trail

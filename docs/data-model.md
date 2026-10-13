@@ -30,9 +30,6 @@ composite index on `(status, created_at)` supports predictable operational scans
 currency use constrained strings instead of PostgreSQL enums so future additions do not
 require non-transactional enum alterations.
 
-Other tables remain intentionally deferred until their owning workflow is implemented. This
-keeps migrations reviewable and prevents speculative columns from becoming accidental API.
-
 The second migration creates `idempotency_keys`. Its primary key is supplied by the API
 client, while a SHA-256 request fingerprint detects incompatible reuse. A unique payment ID
 and a deferred foreign key allow the reservation and payment to be inserted atomically even
@@ -48,3 +45,10 @@ The `provider_events` table durably records the fictional provider's event ID, t
 payment, terminal outcome, payload hash, minimized JSON payload, and receive/process times.
 Its primary key provides duplicate suppression. Event insertion and the locked payment
 transition share one transaction, so neither can commit without the other.
+
+The ledger migration seeds the `PROVIDER_RECEIVABLE` asset account and
+`MERCHANT_PAYABLE` liability account. `ledger_transactions` owns a unique business
+reference and currency; `ledger_entries` stores positive debit or credit amounts against a
+known account. Deferred PostgreSQL constraint triggers require at least two entries and
+equal debit and credit totals at commit time. A successful payment creates its transaction
+and two entries atomically with the provider event.

@@ -82,6 +82,18 @@ replay. Authentication happens before JSON parsing, and the event record plus pa
 transition commit in one transaction. A unique provider event ID makes exact redelivery
 safe; reuse of an ID with different bytes is treated as a conflict.
 
+## Double-entry ledger
+
+A successful payment posts a debit to `PROVIDER_RECEIVABLE` and an equal credit to
+`MERCHANT_PAYABLE`. The ledger transaction, both entries, provider event, and payment state
+transition share one database transaction. A unique business reference makes the posting
+idempotent, while the domain model rejects mixed currencies and unequal totals.
+
+PostgreSQL repeats the balance check through deferred constraint triggers. This allows all
+entries to be inserted normally but prevents commit when a transaction has fewer than two
+entries or its debit and credit totals differ. Ledger rows are immutable by application
+policy; later correction workflows will post compensating entries rather than edit history.
+
 ## Security model
 
 The provider signs webhook payloads with HMAC. Secrets are supplied at runtime and never

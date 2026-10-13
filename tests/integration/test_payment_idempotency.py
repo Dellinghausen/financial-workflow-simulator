@@ -2,7 +2,8 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from financial_workflow.application import (
@@ -26,6 +27,8 @@ from financial_workflow.persistence.jobs import PostgreSQLJobQueue
 from financial_workflow.persistence.models import (
     IdempotencyRecord,
     JobRecord,
+    LedgerEntryRecord,
+    LedgerTransactionRecord,
     PaymentRecord,
     ProviderEventRecord,
 )
@@ -46,6 +49,8 @@ def test_postgresql_enforces_idempotent_payment_creation() -> None:
     engine = build_engine(get_settings().database_url)
     sessions = sessionmaker(engine, expire_on_commit=False)
     with sessions.begin() as session:
+        session.execute(delete(LedgerEntryRecord))
+        session.execute(delete(LedgerTransactionRecord))
         session.execute(delete(ProviderEventRecord))
         session.execute(delete(JobRecord))
         session.execute(delete(IdempotencyRecord))
@@ -122,4 +127,20 @@ def test_postgresql_enforces_idempotent_payment_creation() -> None:
     with Session(engine) as session:
         assert session.scalar(select(PaymentRecord.status)) == "SUCCEEDED"
         assert session.scalar(select(func.count()).select_from(ProviderEventRecord)) == 1
+        assert session.scalar(select(func.count()).select_from(LedgerTransactionRecord)) == 1
+        entries = session.scalars(select(LedgerEntryRecord)).all()
+        assert len(entries) == 2
+        assert sum(entry.amount_minor for entry in entries if entry.direction == "DEBIT") == sum(
+            entry.amount_minor for entry in entries if entry.direction == "CREDIT"
+        )
+
+    with pytest.raises(IntegrityError), sessions.begin() as session:
+        session.execute(
+            update(LedgerEntryRecord)
+            .where(LedgerEntryRecord.direction == "DEBIT")
+            .values(amount_minor=501)
+        )
+
+    with Session(engine) as session:
+        assert set(session.scalars(select(LedgerEntryRecord.amount_minor))) == {500}
     engine.dispose()
